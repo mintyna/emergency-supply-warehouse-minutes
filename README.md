@@ -1,0 +1,2 @@
+# emergency-supply-warehouse-minutes
+应急物资储备库布局优化会议物流纪要全栈系统——前端3D仓库模型显示货架与应急包，后端处理供应链专家讨论，Whisper转写物资分类与时效要求，pyannote区分仓储与物流方，spaCy提取物资编码，OpenAI生成布局调整与补库计划摘要
