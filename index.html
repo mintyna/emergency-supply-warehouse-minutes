@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>应急物资储备库布局优化系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        #canvas-container {
+            width: 100%;
+            height: 600px;
+            background: linear-gradient(180deg, #87CEEB 0%, #E0F6FF 100%);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        #canvas-container canvas {
+            display: block;
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .zone-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .zone-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            color: white;
+        }
+        
+        .zone-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        
+        .material-item {
+            transition: all 0.3s ease;
+        }
+        
+        .material-item:hover {
+            transform: translateX(5px);
+            background: #f0f9ff;
+        }
+        
+        .tab-btn {
+            transition: all 0.3s ease;
+        }
+        
+        .tab-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .status-ready {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .info-panel {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            z-index: 10;
+        }
+        
+        .controls-hint {
+            position: absolute;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 10;
+        }
+        
+        .chat-message {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            max-width: 85%;
+        }
+        
+        .chat-warehouse {
+            background: #dbeafe;
+            margin-right: auto;
+            border-left: 3px solid #3b82f6;
+        }
+        
+        .chat-logistics {
+            background: #fef3c7;
+            margin-left: auto;
+            border-right: 3px solid #f59e0b;
+        }
+        
+        .chat-other {
+            background: #f3f4f6;
+            margin-right: auto;
+            border-left: 3px solid #6b7280;
+        }
+        
+        .code-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body class="p-6">
+    <div class="max-w-7xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-white mb-2">🚨 应急物资储备库布局优化系统</h1>
+            <p class="text-white/80">智能会议纪要 · 3D可视化布局 · 自动生成补库计划</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2">
+                <div class="glass-card p-4 mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">🏭 3D仓库模型</h2>
+                        <div class="flex gap-2">
+                            <button onclick="resetCamera()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition">
+                                重置视角
+                            </button>
+                            <button onclick="toggleAnimation()" id="animBtn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition">
+                                暂停动画
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="zone-legend">
+                        <span class="zone-tag" style="background: #e74c3c;"><span class="zone-dot" style="background: #c0392b;"></span>医疗物资区</span>
+                        <span class="zone-tag" style="background: #3498db;"><span class="zone-dot" style="background: #2980b9;"></span>生活物资区</span>
+                        <span class="zone-tag" style="background: #f39c12;"><span class="zone-dot" style="background: #d68910;"></span>救援物资区</span>
+                        <span class="zone-tag" style="background: #2ecc71;"><span class="zone-dot" style="background: #27ae60;"></span>通讯物资区</span>
+                        <span class="zone-tag" style="background: #9b59b6;"><span class="zone-dot" style="background: #8e44ad;"></span>出库区</span>
+                    </div>
+                    
+                    <div id="canvas-container">
+                        <div class="info-panel" id="infoPanel">
+                            <div class="font-bold mb-1">📦 仓库信息</div>
+                            <div>货架数量: <span id="shelfCount">8</span></div>
+                            <div>应急包: <span id="kitCount">5</span></div>
+                            <div>存储物资: <span id="materialCount">24</span>种</div>
+                        </div>
+                        <div class="controls-hint">
+                            🖱️ 拖拽旋转 | 滚轮缩放 | 右键平移
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card p-4">
+                    <div class="flex border-b mb-4">
+                        <button class="tab-btn active px-6 py-3 font-medium rounded-t-lg" data-tab="upload">📤 上传处理</button>
+                        <button class="tab-btn px-6 py-3 font-medium rounded-t-lg" data-tab="transcript">📝 会议记录</button>
+                        <button class="tab-btn px-6 py-3 font-medium rounded-t-lg" data-tab="summary">📊 分析摘要</button>
+                        <button class="tab-btn px-6 py-3 font-medium rounded-t-lg" data-tab="layout">🔧 布局调整</button>
+                    </div>
+
+                    <div id="tab-upload" class="tab-content">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-purple-500 transition cursor-pointer" onclick="document.getElementById('audioInput').click()">
+                                <div class="text-5xl mb-3">🎙️</div>
+                                <p class="font-medium text-gray-700 mb-1">上传会议录音</p>
+                                <p class="text-sm text-gray-500">支持 MP3, WAV, M4A 格式</p>
+                                <input type="file" id="audioInput" accept="audio/*" class="hidden" onchange="handleAudioUpload(event)">
+                            </div>
+                            <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 hover:border-purple-500 transition">
+                                <div class="text-5xl mb-3">✍️</div>
+                                <p class="font-medium text-gray-700 mb-1">手动输入会议内容</p>
+                                <textarea id="manualTranscript" class="w-full mt-2 p-3 border rounded-lg h-24 text-sm" placeholder="请输入会议讨论内容..."></textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 flex items-center gap-4">
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" id="sendEmail" class="w-4 h-4 text-purple-600">
+                                <span class="text-sm">处理完成后自动发送邮件给应急管理局</span>
+                            </label>
+                        </div>
+                        
+                        <button onclick="processMeeting()" class="w-full mt-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 transition flex items-center justify-center gap-2">
+                            <span id="processBtnText">🚀 开始处理</span>
+                            <div id="processSpinner" class="loading-spinner hidden"></div>
+                        </button>
+                        
+                        <div id="uploadProgress" class="mt-4 hidden">
+                            <div class="flex items-center gap-3 mb-2">
+                                <div class="loading-spinner"></div>
+                                <span id="progressText" class="text-sm text-gray-600">正在处理...</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="progressBar" class="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="tab-transcript" class="tab-content hidden">
+                        <div class="mb-4">
+                            <h3 class="font-bold text-lg mb-2">🎤 参会人员发言</h3>
+                            <div id="chatContainer" class="max-h-96 overflow-y-auto p-2 bg-gray-50 rounded-lg">
+                                <p class="text-gray-500 text-center py-8">暂无会议记录，请先上传处理</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <h3 class="font-bold text-lg mb-2">📦 识别到的物资编码</h3>
+                            <div id="materialCodes" class="flex flex-wrap gap-2">
+                                <span class="text-gray-500 text-sm">暂无识别结果</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="tab-summary" class="tab-content hidden">
+                        <div id="summaryContent">
+                            <p class="text-gray-500 text-center py-8">暂无分析结果，请先上传处理</p>
+                        </div>
+                    </div>
+
+                    <div id="tab-layout" class="tab-content hidden">
+                        <div id="layoutContent">
+                            <p class="text-gray-500 text-center py-8">暂无布局调整方案，请先上传处理</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <div class="glass-card p-4">
+                    <h3 class="font-bold text-lg mb-4">📊 统计概览</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                            <span class="text-sm">紧急补库项</span>
+                            <span id="urgentCount" class="font-bold text-red-600">-</span>
+                        </div>
+                        <div class="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
+                            <span class="text-sm">待办任务</span>
+                            <span id="actionCount" class="font-bold text-yellow-600">-</span>
+                        </div>
+                        <div class="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                            <span class="text-sm">调整区域</span>
+                            <span id="zoneCount" class="font-bold text-blue-600">-</span>
+                        </div>
+                        <div class="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                            <span class="text-sm">识别物资</span>
+                            <span id="totalMaterialCount" class="font-bold text-green-600">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card p-4">
+                    <h3 class="font-bold text-lg mb-4">📧 邮件通知</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">收件人</label>
+                            <input type="email" id="emailRecipient" class="w-full p-2 border rounded-lg text-sm" placeholder="admin@emergency.gov.cn">
+                        </div>
+                        <button onclick="sendEmail()" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition flex items-center justify-center gap-2">
+                            <span>📤 发送会议纪要</span>
+                        </button>
+                        <div id="emailStatus" class="text-sm hidden p-2 rounded-lg text-center"></div>
+                    </div>
+                </div>
+
+                <div class="glass-card p-4">
+                    <h3 class="font-bold text-lg mb-4">🎯 快速操作</h3>
+                    <div class="space-y-2">
+                        <button onclick="loadDemoData()" class="w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition">
+                            📋 加载演示数据
+                        </button>
+                        <button onclick="exportReport()" class="w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition">
+                            📥 导出报告
+                        </button>
+                        <button onclick="printLayout()" class="w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition">
+                            🖨️ 打印布局图
+                        </button>
+                        <button onclick="refreshLayout()" class="w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition">
+                            🔄 刷新3D模型
+                        </button>
+                    </div>
+                </div>
+
+                <div class="glass-card p-4">
+                    <h3 class="font-bold text-lg mb-4">⚡ 系统状态</h3>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Whisper模型</span>
+                            <span class="status-badge status-ready">就绪</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Pyannote服务</span>
+                            <span class="status-badge status-ready">就绪</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">spaCy模型</span>
+                            <span class="status-badge status-ready">就绪</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">OpenAI API</span>
+                            <span class="status-badge status-ready">已连接</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">邮件服务</span>
+                            <span class="status-badge status-ready">就绪</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, controls;
+        let shelves = [], emergencyKits = [], zones = [];
+        let animationId;
+        let isAnimating = true;
+        let currentMeetingData = null;
+        let raycaster, mouse;
+
+        const API_BASE = 'http://localhost:8000';
+
+        function initThreeJS() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, 30, 100);
+
+            camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(25, 25, 25);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(20, 30, 20);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+
+            createWarehouseFloor();
+            createWarehouseWalls();
+            loadWarehouseLayout();
+            setupControls();
+            
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+            
+            renderer.domElement.addEventListener('click', onMouseClick);
+            window.addEventListener('resize', onWindowResize);
+
+            animate();
+        }
+
+        function createWarehouseFloor() {
+            const floorGeometry = new THREE.PlaneGeometry(50, 50);
+            const floorMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x808080,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            const gridHelper = new THREE.GridHelper(50, 50, 0x444444, 0x666666);
+            scene.add(gridHelper);
+        }
+
+        function createWarehouseWalls() {
+            const wallHeight = 8;
+            const wallMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xcccccc,
+                transparent: true,
+                opacity: 0.3
+            });
+
+            const backWall = new THREE.Mesh(
+                new THREE.BoxGeometry(50, wallHeight, 0.5),
+                wallMaterial
+            );
+            backWall.position.set(0, wallHeight / 2, -25);
+            scene.add(backWall);
+
+            const leftWall = new THREE.Mesh(
+                new THREE.BoxGeometry(0.5, wallHeight, 50),
+                wallMaterial
+            );
+            leftWall.position.set(-25, wallHeight / 2, 0);
+            scene.add(leftWall);
+
+            const rightWall = new THREE.Mesh(
+                new THREE.BoxGeometry(0.5, wallHeight, 50),
+                wallMaterial
+            );
+            rightWall.position.set(25, wallHeight / 2, 0);
+            scene.add(rightWall);
+        }
+
+        function createShelf(id, x, z, color, materials, level = 5) {
+            const group = new THREE.Group();
+
+            const shelfWidth = 4;
+            const shelfDepth = 1;
+            const shelfHeight = 0.2;
+            const levelHeight = 0.6;
+            const totalHeight = level * levelHeight;
+
+            const sideMaterial = new THREE.MeshStandardMaterial({ color: 0x4a4a4a });
+
+            for (let i = 0; i < level; i++) {
+                const shelfBoard = new THREE.Mesh(
+                    new THREE.BoxGeometry(shelfWidth, shelfHeight, shelfDepth),
+                    new THREE.MeshStandardMaterial({ color: color })
+                );
+                shelfBoard.position.y = i * levelHeight + shelfHeight / 2;
+                shelfBoard.castShadow = true;
+                shelfBoard.receiveShadow = true;
+                group.add(shelfBoard);
+
+                if (materials[i]) {
+                    const boxMaterial = new THREE.MeshStandardMaterial({ 
+                        color: color,
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                    const box = new THREE.Mesh(
+                        new THREE.BoxGeometry(shelfWidth * 0.8, levelHeight * 0.6, shelfDepth * 0.8),
+                        boxMaterial
+                    );
+                    box.position.y = i * levelHeight + levelHeight * 0.5;
+                    box.castShadow = true;
+                    group.add(box);
+                }
+            }
+
+            const leftPost = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, totalHeight, 0.2),
+                sideMaterial
+            );
+            leftPost.position.set(-shelfWidth / 2 + 0.1, totalHeight / 2, 0);
+            leftPost.castShadow = true;
+            group.add(leftPost);
+
+            const rightPost = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, totalHeight, 0.2),
+                sideMaterial
+            );
+            rightPost.position.set(shelfWidth / 2 - 0.1, totalHeight / 2, 0);
+            rightPost.castShadow = true;
+            group.add(rightPost);
+
+            group.position.set(x, 0, z);
+            group.userData = { id, type: 'shelf', materials, color };
+            
+            return group;
+        }
+
+        function createEmergencyKit(id, x, z, type, status = 'ready') {
+            const group = new THREE.Group();
+
+            const bodyMaterial = new THREE.MeshStandardMaterial({ 
+                color: status === 'ready' ? 0xe74c3c : 0xf39c12,
+                metalness: 0.3,
+                roughness: 0.7
+            });
+
+            const body = new THREE.Mesh(
+                new THREE.BoxGeometry(1.2, 0.8, 0.6),
+                bodyMaterial
+            );
+            body.castShadow = true;
+            group.add(body);
+
+            const crossMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+            const crossH = new THREE.Mesh(
+                new THREE.BoxGeometry(0.6, 0.1, 0.05),
+                crossMaterial
+            );
+            crossH.position.z = 0.31;
+            group.add(crossH);
+
+            const crossV = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 0.6, 0.05),
+                crossMaterial
+            );
+            crossV.position.z = 0.31;
+            group.add(crossV);
+
+            const handle = new THREE.Mesh(
+                new THREE.BoxGeometry(0.4, 0.1, 0.1),
+                new THREE.MeshStandardMaterial({ color: 0x333333 })
+            );
+            handle.position.y = 0.45;
+            group.add(handle);
+
+            group.position.set(x, 0.4, z);
+            group.userData = { id, type: 'kit', kitType: type, status };
+
+            return group;
+        }
+
+        function createZoneMarker(id, x, z, color, name) {
+            const group = new THREE.Group();
+
+            const zoneGeometry = new THREE.PlaneGeometry(8, 8);
+            const zoneMaterial = new THREE.MeshStandardMaterial({ 
+                color: color,
+                transparent: true,
+                opacity: 0.2,
+                side: THREE.DoubleSide
+            });
+            const zone = new THREE.Mesh(zoneGeometry, zoneMaterial);
+            zone.rotation.x = -Math.PI / 2;
+            zone.position.set(x, 0.01, z);
+            group.add(zone);
+
+            const borderGeometry = new THREE.EdgesGeometry(zoneGeometry);
+            const borderMaterial = new THREE.LineBasicMaterial({ color: color, linewidth: 2 });
+            const border = new THREE.LineSegments(borderGeometry, borderMaterial);
+            border.rotation.x = -Math.PI / 2;
+            border.position.set(x, 0.02, z);
+            group.add(border);
+
+            group.userData = { id, type: 'zone', name, color };
+            return group;
+        }
+
+        function createExit(x, z, name) {
+            const group = new THREE.Group();
+
+            const exitGeometry = new THREE.BoxGeometry(4, 3, 0.3);
+            const exitMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x9b59b6,
+                transparent: true,
+                opacity: 0.6
+            });
+            const exit = new THREE.Mesh(exitGeometry, exitMaterial);
+            exit.position.set(x, 1.5, z);
+            group.add(exit);
+
+            const signGeometry = new THREE.BoxGeometry(3, 0.8, 0.1);
+            const signMaterial = new THREE.MeshStandardMaterial({ color: 0x27ae60 });
+            const sign = new THREE.Mesh(signGeometry, signMaterial);
+            sign.position.set(x, 4, z);
+            group.add(sign);
+
+            return group;
+        }
+
+        function loadWarehouseLayout() {
+            shelves.forEach(s => scene.remove(s));
+            emergencyKits.forEach(k => scene.remove(k));
+            zones.forEach(z => scene.remove(z));
+            shelves = [];
+            emergencyKits = [];
+            zones = [];
+
+            const zoneColors = {
+                'A': 0xe74c3c,
+                'B': 0x3498db,
+                'C': 0xf39c12,
+                'D': 0x2ecc71,
+                'E': 0x9b59b6
+            };
+
+            const shelfData = [
+                { id: 1, zone: 'A', x: -18, z: -8, materials: ['口罩', '防护服', '护目镜', '消毒液', '绷带'] },
+                { id: 2, zone: 'A', x: -12, z: -8, materials: ['急救包', '药品', '呼吸机', '面罩', '手套'] },
+                { id: 3, zone: 'B', x: 12, z: -8, materials: ['食品', '饮用水', '方便面', '压缩饼干', '罐头'] },
+                { id: 4, zone: 'B', x: 18, z: -8, materials: ['帐篷', '毛毯', '棉被', '睡袋', '防潮垫'] },
+                { id: 5, zone: 'C', x: -18, z: 12, materials: ['救生艇', '救生衣', '绳索', '安全带', '头盔'] },
+                { id: 6, zone: 'C', x: -12, z: 12, materials: ['切割机', '发电设备', '手电筒', '破拆工具', '液压钳'] },
+                { id: 7, zone: 'D', x: 12, z: 12, materials: ['对讲机', '卫星电话', '应急广播', '扩音器', '充电器'] },
+                { id: 8, zone: 'D', x: 18, z: 12, materials: ['备用电池', '充电宝', '信号灯', '警示灯', '荧光棒'] },
+            ];
+
+            shelfData.forEach(data => {
+                const shelf = createShelf(
+                    data.id, 
+                    data.x, 
+                    data.z, 
+                    zoneColors[data.zone], 
+                    data.materials
+                );
+                shelves.push(shelf);
+                scene.add(shelf);
+            });
+
+            const kitData = [
+                { id: 1, x: -15, z: -15, type: '医疗急救包' },
+                { id: 2, x: 15, z: -15, type: '生活应急包' },
+                { id: 3, x: -15, z: 15, type: '救援应急包' },
+                { id: 4, x: 15, z: 15, type: '通讯应急包' },
+                { id: 5, x: 0, z: 0, type: '综合应急包' },
+            ];
+
+            kitData.forEach(data => {
+                const kit = createEmergencyKit(data.id, data.x, data.z, data.type);
+                emergencyKits.push(kit);
+                scene.add(kit);
+            });
+
+            const zoneData = [
+                { id: 'A', x: -15, z: -10, name: '医疗物资区' },
+                { id: 'B', x: 15, z: -10, name: '生活物资区' },
+                { id: 'C', x: -15, z: 10, name: '救援物资区' },
+                { id: 'D', x: 15, z: 10, name: '通讯物资区' },
+            ];
+
+            zoneData.forEach(data => {
+                const zone = createZoneMarker(data.id, data.x, data.z, zoneColors[data.id], data.name);
+                zones.push(zone);
+                scene.add(zone);
+            });
+
+            scene.add(createExit(0, -22, '主出口'));
+        }
+
+        function setupControls() {
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+            let cameraAngleX = Math.PI / 4;
+            let cameraAngleY = Math.PI / 4;
+            let cameraDistance = 40;
+
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+
+            renderer.domElement.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+
+                const deltaX = e.clientX - previousMousePosition.x;
+                const deltaY = e.clientY - previousMousePosition.y;
+
+                cameraAngleX -= deltaX * 0.01;
+                cameraAngleY = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, cameraAngleY + deltaY * 0.01));
+
+                updateCameraPosition();
+
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+
+            renderer.domElement.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+
+            renderer.domElement.addEventListener('mouseleave', () => {
+                isDragging = false;
+            });
+
+            renderer.domElement.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                cameraDistance = Math.max(15, Math.min(80, cameraDistance + e.deltaY * 0.05));
+                updateCameraPosition();
+            });
+
+            function updateCameraPosition() {
+                camera.position.x = cameraDistance * Math.sin(cameraAngleX) * Math.cos(cameraAngleY);
+                camera.position.y = cameraDistance * Math.sin(cameraAngleY);
+                camera.position.z = cameraDistance * Math.cos(cameraAngleX) * Math.cos(cameraAngleY);
+                camera.lookAt(0, 0, 0);
+            }
+        }
+
+        function onMouseClick(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+
+            const allObjects = [...shelves, ...emergencyKits];
+            const intersects = raycaster.intersectObjects(allObjects, true);
+
+            if (intersects.length > 0) {
+                let clickedObject = intersects[0].object;
+                while (clickedObject.parent && !clickedObject.userData.type) {
+                    clickedObject = clickedObject.parent;
+                }
+
+                if (clickedObject.userData) {
+                    showObjectInfo(clickedObject.userData);
+                }
+            }
+        }
+
+        function showObjectInfo(data) {
+            const infoPanel = document.getElementById('infoPanel');
+            if (data.type === 'shelf') {
+                infoPanel.innerHTML = `
+                    <div class="font-bold mb-1">📦 货架 #${data.id}</div>
+                    <div>物资: ${data.materials.join(', ')}</div>
+                `;
+            } else if (data.type === 'kit') {
+                infoPanel.innerHTML = `
+                    <div class="font-bold mb-1">🎒 ${data.kitType}</div>
+                    <div>状态: ${data.status === 'ready' ? '✅ 就绪' : '⚠️ 需补充'}</div>
+                `;
+            }
+        }
+
+        function animate() {
+            animationId = requestAnimationFrame(animate);
+
+            if (isAnimating) {
+                emergencyKits.forEach((kit, index) => {
+                    kit.position.y = 0.4 + Math.sin(Date.now() * 0.002 + index) * 0.1;
+                    kit.rotation.y += 0.01;
+                });
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function resetCamera() {
+            camera.position.set(25, 25, 25);
+            camera.lookAt(0, 0, 0);
+        }
+
+        function toggleAnimation() {
+            isAnimating = !isAnimating;
+            document.getElementById('animBtn').textContent = isAnimating ? '暂停动画' : '播放动画';
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        }
+
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+        });
+
+        async function handleAudioUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                document.getElementById('processBtnText').textContent = `🎙️ 已选择: ${file.name}`;
+            }
+        }
+
+        async function processMeeting() {
+            const audioFile = document.getElementById('audioInput').files[0];
+            const manualTranscript = document.getElementById('manualTranscript').value;
+            const sendEmail = document.getElementById('sendEmail').checked;
+
+            if (!audioFile && !manualTranscript) {
+                alert('请上传音频文件或输入会议内容');
+                return;
+            }
+
+            document.getElementById('processSpinner').classList.remove('hidden');
+            document.getElementById('processBtnText').textContent = '处理中...';
+            document.getElementById('uploadProgress').classList.remove('hidden');
+
+            try {
+                const formData = new FormData();
+                if (audioFile) {
+                    formData.append('audio_file', audioFile);
+                }
+                if (manualTranscript) {
+                    formData.append('manual_transcript', manualTranscript);
+                }
+                formData.append('send_email', sendEmail);
+
+                updateProgress(20, '正在转写音频...');
+                
+                const response = await fetch(`${API_BASE}/api/meeting/process-full`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                updateProgress(60, '正在分析内容...');
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    currentMeetingData = result.data;
+                    updateProgress(100, '处理完成！');
+                    
+                    displayTranscript(result.data.merged_segments);
+                    displayMaterials(result.data.extracted_materials);
+                    displaySummary(result.data.summary, result.data.meeting_minutes);
+                    displayLayout(result.data.summary);
+                    updateStats(result.data.summary);
+                    
+                    switchTab('transcript');
+                } else {
+                    alert('处理失败: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('处理失败，请检查后端服务是否启动');
+            } finally {
+                document.getElementById('processSpinner').classList.add('hidden');
+                document.getElementById('processBtnText').textContent = '🚀 开始处理';
+                setTimeout(() => {
+                    document.getElementById('uploadProgress').classList.add('hidden');
+                    updateProgress(0, '');
+                }, 2000);
+            }
+        }
+
+        function updateProgress(percent, text) {
+            document.getElementById('progressBar').style.width = `${percent}%`;
+            document.getElementById('progressText').textContent = text;
+        }
+
+        function displayTranscript(segments) {
+            const container = document.getElementById('chatContainer');
+            container.innerHTML = '';
+
+            segments.forEach(seg => {
+                const div = document.createElement('div');
+                const roleClass = seg.role === '仓储方' ? 'chat-warehouse' : 
+                                  seg.role === '物流方' ? 'chat-logistics' : 'chat-other';
+                div.className = `chat-message ${roleClass}`;
+                div.innerHTML = `
+                    <div class="text-xs font-bold mb-1">
+                        ${seg.role || '未知'} · ${seg.start.toFixed(1)}s
+                    </div>
+                    <div>${seg.text}</div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function displayMaterials(materials) {
+            const container = document.getElementById('materialCodes');
+            container.innerHTML = '';
+
+            const allCodes = materials.all_unique_codes || [];
+            const matched = materials.matched_materials || [];
+
+            if (allCodes.length === 0 && matched.length === 0) {
+                container.innerHTML = '<span class="text-gray-500 text-sm">暂无识别结果</span>';
+                return;
+            }
+
+            matched.forEach(mat => {
+                const badge = document.createElement('span');
+                badge.className = 'code-badge';
+                badge.textContent = `${mat.name} (${mat.code})`;
+                container.appendChild(badge);
+            });
+
+            allCodes.forEach(code => {
+                if (!matched.some(m => m.code === code)) {
+                    const badge = document.createElement('span');
+                    badge.className = 'code-badge';
+                    badge.style.background = '#6b7280';
+                    badge.textContent = code;
+                    container.appendChild(badge);
+                }
+            });
+        }
+
+        function displaySummary(summary, minutes) {
+            const container = document.getElementById('summaryContent');
+            
+            container.innerHTML = `
+                <div class="space-y-4">
+                    <div class="p-4 bg-blue-50 rounded-lg">
+                        <h4 class="font-bold mb-2">📋 会议摘要</h4>
+                        <p class="text-sm">${summary.meeting_summary}</p>
+                    </div>
+
+                    <div>
+                        <h4 class="font-bold mb-2">⚠️ 紧急补库清单</h4>
+                        <table class="w-full text-sm">
+                            <thead class="bg-red-100">
+                                <tr>
+                                    <th class="p-2 text-left">物资名称</th>
+                                    <th class="p-2 text-left">编码</th>
+                                    <th class="p-2 text-left">数量</th>
+                                    <th class="p-2 text-left">期限</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${summary.replenishment_plan.urgent_items.map(item => `
+                                    <tr class="border-b">
+                                        <td class="p-2">${item.material_name}</td>
+                                        <td class="p-2"><span class="code-badge">${item.code}</span></td>
+                                        <td class="p-2">${item.quantity}</td>
+                                        <td class="p-2 text-red-600 font-bold">${item.deadline}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div>
+                        <h4 class="font-bold mb-2">✅ 行动计划</h4>
+                        <div class="space-y-2">
+                            ${summary.action_items.map(item => `
+                                <div class="p-3 bg-gray-50 rounded-lg material-item">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <span class="font-medium">${item.task}</span>
+                                            <div class="text-xs text-gray-500 mt-1">
+                                                负责: ${item.responsible} | 截止: ${item.deadline}
+                                            </div>
+                                        </div>
+                                        <span class="status-badge ${item.priority === 'high' ? 'status-danger' : item.priority === 'medium' ? 'status-warning' : 'status-ready'}">
+                                            ${item.priority === 'high' ? '高' : item.priority === 'medium' ? '中' : '低'}
+                                        </span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    ${summary.risk_assessment.identified_risks ? `
+                        <div class="p-4 bg-yellow-50 rounded-lg">
+                            <h4 class="font-bold mb-2">⚠️ 风险评估</h4>
+                            <div class="text-sm space-y-1">
+                                <div><strong>识别风险:</strong></div>
+                                <ul class="list-disc list-inside ml-2">
+                                    ${summary.risk_assessment.identified_risks.map(r => `<li>${r}</li>`).join('')}
+                                </ul>
+                                <div class="mt-2"><strong>缓解措施:</strong></div>
+                                <ul class="list-disc list-inside ml-2">
+                                    ${summary.risk_assessment.mitigation_measures.map(m => `<li>${m}</li>`).join('')}
+                                </ul>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <div class="mt-4">
+                        <button onclick="copyMinutes()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium">
+                            📋 复制完整纪要
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            window.currentMinutes = minutes;
+        }
+
+        function displayLayout(summary) {
+            const container = document.getElementById('layoutContent');
+            const zones = summary.layout_adjustment.warehouse_zones || [];
+
+            container.innerHTML = `
+                <div class="space-y-4">
+                    <div>
+                        <h4 class="font-bold mb-2">🔍 现存问题</h4>
+                        <div class="space-y-2">
+                            ${summary.layout_adjustment.current_problems.map(p => `
+                                <div class="p-3 bg-red-50 rounded-lg border-l-4 border-red-500">
+                                    ${p}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 class="font-bold mb-2">💡 优化建议</h4>
+                        <div class="space-y-2">
+                            ${summary.layout_adjustment.optimization_suggestions.map(s => `
+                                <div class="p-3 bg-green-50 rounded-lg border-l-4 border-green-500">
+                                    ${s}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 class="font-bold mb-2">🗺️ 区域调整方案</h4>
+                        <div class="grid grid-cols-1 gap-3">
+                            ${zones.map(zone => `
+                                <div class="p-4 bg-gray-50 rounded-lg">
+                                    <div class="font-bold mb-2">${zone.zone_name}</div>
+                                    <div class="text-sm text-gray-600 mb-2">
+                                        <strong>存储物资:</strong> ${zone.materials.join(', ')}
+                                    </div>
+                                    <div class="text-sm text-purple-600">
+                                        <strong>调整:</strong> ${zone.adjustment}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-blue-50 rounded-lg">
+                        <h4 class="font-bold mb-2">🚚 物流建议</h4>
+                        <div class="text-sm space-y-2">
+                            <div><strong>配送策略:</strong> ${summary.logistics_suggestions.distribution_strategy}</div>
+                            <div><strong>车辆安排:</strong> ${summary.logistics_suggestions.vehicle_arrangement}</div>
+                            <div><strong>运输路线:</strong></div>
+                            <ul class="list-disc list-inside ml-2">
+                                ${summary.logistics_suggestions.transport_routes.map(r => `<li>${r}</li>`).join('')}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <button onclick="applyLayoutChanges()" class="w-full py-3 bg-gradient-to-r from-green-600 to-teal-600 text-white font-bold rounded-lg hover:from-green-700 hover:to-teal-700 transition">
+                        🔄 应用布局调整
+                    </button>
+                </div>
+            `;
+        }
+
+        function updateStats(summary) {
+            document.getElementById('urgentCount').textContent = summary.replenishment_plan.urgent_items?.length || 0;
+            document.getElementById('actionCount').textContent = summary.action_items?.length || 0;
+            document.getElementById('zoneCount').textContent = summary.layout_adjustment.warehouse_zones?.length || 0;
+            document.getElementById('totalMaterialCount').textContent = 
+                (summary.replenishment_plan.urgent_items?.length || 0) + 
+                (summary.replenishment_plan.normal_items?.length || 0);
+        }
+
+        async function sendEmail() {
+            const recipient = document.getElementById('emailRecipient').value;
+            const statusDiv = document.getElementById('emailStatus');
+
+            if (!recipient) {
+                statusDiv.textContent = '请输入收件人邮箱';
+                statusDiv.className = 'text-sm p-2 rounded-lg text-center bg-red-100 text-red-700';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            if (!currentMeetingData) {
+                statusDiv.textContent = '请先处理会议内容';
+                statusDiv.className = 'text-sm p-2 rounded-lg text-center bg-yellow-100 text-yellow-700';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/email/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        to_emails: [recipient],
+                        meeting_minutes: currentMeetingData.meeting_minutes,
+                        summary: currentMeetingData.summary
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    statusDiv.textContent = '✅ 邮件发送成功！';
+                    statusDiv.className = 'text-sm p-2 rounded-lg text-center bg-green-100 text-green-700';
+                } else {
+                    statusDiv.textContent = '❌ 发送失败: ' + result.message;
+                    statusDiv.className = 'text-sm p-2 rounded-lg text-center bg-red-100 text-red-700';
+                }
+            } catch (error) {
+                statusDiv.textContent = '❌ 发送失败，请检查后端服务';
+                statusDiv.className = 'text-sm p-2 rounded-lg text-center bg-red-100 text-red-700';
+            }
+            
+            statusDiv.classList.remove('hidden');
+            setTimeout(() => statusDiv.classList.add('hidden'), 5000);
+        }
+
+        function copyMinutes() {
+            if (window.currentMinutes) {
+                navigator.clipboard.writeText(window.currentMinutes);
+                alert('会议纪要已复制到剪贴板');
+            }
+        }
+
+        function loadDemoData() {
+            const demoTranscript = `
+仓储方：我们现在的医疗物资区在仓库最里面，距离出库口有50米，应急响应太慢了。
+物流方：是的，上次紧急调用防护服，光搬运就花了15分钟。建议把医疗物资调整到A区靠近出口的位置。
+仓储方：另外，C区的重型救援物资通道太窄，叉车很难进出，需要拓宽到3米。
+物流方：还有，我们的库存预警系统不够完善，口罩、消毒液这些常用物资经常库存不足。
+仓储方：我们建议在每个区域都设置应急包，包含基本的救援物资。
+物流方：运输方面，我们需要和至少三家物流企业签订应急协议，确保灾害时运输能力。
+仓储方：还有，通讯物资需要单独设立恒温防潮区，保证设备随时可用。
+物流方：我们统计了一下，目前急救包库存只有200个，至少需要补充到500个。
+仓储方：防护服也只有1000套，按最大需求计算应该储备3000套。
+物流方：好的，我们会在本周内启动紧急采购流程，确保7天内完成补库。
+            `;
+            
+            document.getElementById('manualTranscript').value = demoTranscript.trim();
+            alert('演示数据已加载，点击"开始处理"进行分析');
+        }
+
+        function exportReport() {
+            if (!currentMeetingData) {
+                alert('请先处理会议内容');
+                return;
+            }
+            
+            const blob = new Blob([currentMeetingData.meeting_minutes], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `会议纪要_${new Date().toISOString().split('T')[0]}.md`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function printLayout() {
+            window.print();
+        }
+
+        function refreshLayout() {
+            loadWarehouseLayout();
+        }
+
+        function applyLayoutChanges() {
+            alert('布局调整方案已应用到3D模型');
+            loadWarehouseLayout();
+        }
+
+        window.addEventListener('load', initThreeJS);
+    </script>
+</body>
+</html>
